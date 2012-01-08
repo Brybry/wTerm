@@ -67,6 +67,12 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+
+  struct winsize w;
+  ioctl(0, TIOCGWINSZ, &w);
+  max_cols = w.ws_col;
+  max_lines = w.ws_row;
+
   static MENU mainmenu[] = {
       { "Exit",                                              0 },
       { "Test of cursor movements",                          tst_movements },
@@ -165,10 +171,7 @@ main(int argc, char *argv[])
 #endif
 
     title(1);
-    if (max_lines != 24
-     || min_cols  != 80
-     || max_cols  != 132)
-      printf("Screen size %dx%d (%d max) ", max_lines, min_cols, max_cols);
+    printf("Screen size %dx%d (%d max) ", max_lines, min_cols, max_cols);
     if (tty_speed != DEFAULT_SPEED)
       printf("Line speed %dbd ", tty_speed);
     if (use_padding)
@@ -1119,15 +1122,8 @@ bye (void)
   if (LOG_ENABLED)
     fprintf(log_fp, "Cleanup & exit\n");
 
-  default_level();    /* Enter ANSI mode (if in VT52 mode)    */
-  decckm(FALSE);      /* cursor keys normal   */
-  deccolm(FALSE);     /* 80 col mode          */
-  decscnm(FALSE);     /* Normal screen        */
-  decom(FALSE);       /* Absolute origin mode */
-  decawm(TRUE);       /* Wrap around on       */
-  decarm(TRUE);       /* Auto repeat on       */
-  decstbm(0,0);       /* No scroll region     */
-  sgr("0");           /* Normal character attributes  */
+  /* Reset terminal ~PTM */
+  ris();
 
   /* Say goodbye */
 

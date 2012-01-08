@@ -11,7 +11,12 @@ enyo.kind({
 	components: [
 		{name: "shadow", className: "enyo-sliding-view-shadow"},
 		{kind: "VFlexBox", height: "100%", components: [
-			{kind: "Header", pack: 'center', content: "Preferences"},
+			{kind: "Header", pack: 'center', components: [
+				{kind: "RadioToolButtonGroup", components: [
+	    	  		{caption: "Appearance", style: ''},
+			      	{caption: "KeyBindings"},
+			  	]}
+			]},
 	  		{kind: "Scroller", flex: 1, components: [
 	  			{kind: "RowGroup", caption: 'Text', flex: 1, components: [
 					{kind: 'Item', layoutKind: 'HFlexLayout', align: "center", style: 'padding: 0; margin: 0', components: [

@@ -38,31 +38,10 @@ SDLCore::SDLCore()
 	m_surface = NULL;
 	m_nFontSize = 12;
 
-	SDL_Color m_colors[] = {
-			{ 0, 0, 0 }, // COLOR_BLACK
-			{ 187, 0, 0 }, // COLOR_RED
-			{ 0, 187, 0 }, // COLOR_GREEN
-			{ 187, 187, 0 }, // COLOR_YELLOW
-			{ 0, 0, 187 }, // COLOR_BLUE
-			{ 187, 0, 187 }, // COLOR_MAGENTA
-			{ 0, 187, 187 }, // COLOR_CYAN
-			{ 187, 187, 187 }, // COLOR_WHITE
-			{ 85, 85, 85 }, // COLOR_BLACK_BRIGHT
-			{ 255, 85, 85 }, // COLOR_RED_BRIGHT
-			{ 85, 255, 85 }, // COLOR_GREEN_BRIGHT
-			{ 255, 255, 85 }, // COLOR_YELLOW_BRIGHT
-			{ 85, 85, 255 }, // COLOR_BLUE_BRIGHT
-			{ 255, 85, 255 }, // COLOR_MAGENTA_BRIGHT
-			{ 85, 255, 255 }, // COLOR_CYAN_BRIGHT
-			{ 255, 255, 255 }, // COLOR_WHITE_BRIGHT
-			{ 187, 187, 187 }, // COLOR_FOREGROUND
-			{ 0, 0, 0 }, // COLOR_BACKGROUND
-			{ 255, 255, 255 }, // COLOR_FOREGROUND_BRIGHT
-			{ 0, 0, 0 }, // COLOR_BACKGROUND_BRIGHT
-	};
-
-	m_foregroundColor = m_colors[TS_COLOR_FOREGROUND];
-	m_backgroundColor = m_colors[TS_COLOR_BACKGROUND];
+	m_foregroundColor = TS_COLOR_FOREGROUND;
+	m_backgroundColor = TS_COLOR_BACKGROUND;
+	m_bBold = false;
+	m_bItalic = false;
 
 	m_fontNormal = NULL;
 	m_fontBold = NULL;
@@ -155,6 +134,8 @@ int SDLCore::initOpenGL()
 	
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	resetGlyphCache();
 
 	return 0;
 }
@@ -265,45 +246,83 @@ void SDLCore::eventLoop()
 {
 	// Event descriptor
 	SDL_Event event;
+	Uint32 lOldTime = SDL_GetTicks();
+	Uint32 lCurrentTime = SDL_GetTicks();
+	Uint32 lCycleTimeSlot = 25;
+	Uint32 lDelay;
 
 	while (isRunning()) {
+		// Block for an event, and then handle all queued events.
+		// This is important since input events (particularly mouse events)
+		// shouldn't be synchronous with a redraw but especially because various
+		// terminal-source events (a quickly scrolling buffer, for example) mark
+		// the screen as dirty and force a refresh.  We should never end up trying
+		// to draw faster than a controlled amount in all cases.
 		SDL_WaitEvent(&event);
-		switch (event.type)
+		do {
+			switch (event.type)
+			{
+				case SDL_MOUSEMOTION:
+				case SDL_MOUSEBUTTONDOWN:
+				case SDL_MOUSEBUTTONUP:
+					handleMouseEvent(event);
+					break;
+				case SDL_KEYUP:
+				case SDL_KEYDOWN:
+					handleKeyboardEvent(event);
+					break;
+				case SDL_ACTIVEEVENT:
+					// Remove old suspend stuff, maybe add back later. ~PTM
+					break;
+				case SDL_VIDEOEXPOSE:
+					redraw();
+					setDirty(BUFFER_DIRTY_BIT);
+					break;
+				case SDL_VIDEORESIZE:
+					closeFonts();
+					m_surface = SDL_SetVideoMode(0, 0, 0, SDL_OPENGL);
+					createFonts(m_nFontSize);
+					initOpenGL();
+					updateDisplaySize();
+					redraw();
+					break;
+				case SDL_QUIT:
+					return;
+				default:
+					break;
+			}
+		} while (SDL_PollEvent(&event));
+
+		if (isDirty(FONT_DIRTY_BIT))
 		{
-			case SDL_MOUSEMOTION:
-			case SDL_MOUSEBUTTONDOWN:
-			case SDL_MOUSEBUTTONUP:
-				handleMouseEvent(event);
-				break;
-			case SDL_KEYUP:
-			case SDL_KEYDOWN:
-				handleKeyboardEvent(event);
-				break;
-			case SDL_ACTIVEEVENT:
-				// Remove old suspend stuff, maybe add back later. ~PTM
-				break;
-			case SDL_VIDEOEXPOSE:
-				redraw();
-				setDirty(BUFFER_DIRTY_BIT);
-				break;
-			case SDL_VIDEORESIZE:
-				closeFonts();
-				m_surface = SDL_SetVideoMode(0, 0, 0, SDL_OPENGL);
-				initOpenGL();
-				createFonts(m_nFontSize);
-				updateDisplaySize();
-				redraw();
-				break;
-			case SDL_QUIT:
-				return;
-			default:
-				break;
+			clearDirty(FONT_DIRTY_BIT);
+			resetGlyphCache();
+			redraw();
 		}
+
+		// Redraw if needed
 		if (isDirty(BUFFER_DIRTY_BIT))
 		{
-			SDL_GL_SwapBuffers();
 			clearDirty(BUFFER_DIRTY_BIT);
+			SDL_GL_SwapBuffers();
 		}
+
+		// Are we going too fast?  If so, sleep some accordingly.
+		lCurrentTime = SDL_GetTicks();
+
+		if ((lCurrentTime - lOldTime) < lCycleTimeSlot)
+		{
+			lDelay = lOldTime + lCycleTimeSlot - lCurrentTime;
+
+			if (lDelay > lCycleTimeSlot)
+			{
+				lDelay = lCycleTimeSlot;
+			}
+
+			SDL_Delay(lDelay);
+		}
+
+		lOldTime = SDL_GetTicks();
 	}
 }
 
@@ -425,19 +444,20 @@ int SDLCore::setFontSize(int nSize)
  * Draws a string on the display. Given the monospaced font, assumes that the display is a grid of text.
  * The top left corner of the screen is (1, 1). If the give location is out of bounds, then no action is taken.
  */
-void SDLCore::printText(int nColumn, int nLine, const char *sText, bool bBold, bool bItalic)
+void SDLCore::printText(int nColumn, int nLine, const char *sText)
 {
 	if (nColumn < 1 || nLine < 1 || nColumn > m_nMaxColumnsOfText || nLine > m_nMaxLinesOfText)
 	{
 		return;
 	}
 
-	drawText((nColumn - 1) * m_nFontWidth, (nLine - 1) * m_nFontHeight, sText, bBold, bItalic);
+	drawText((nColumn - 1) * m_nFontWidth, (nLine - 1) * m_nFontHeight, sText);
 }
 
 void SDLCore::drawRect(int nX, int nY, int nWidth, int nHeight, SDL_Color color, float fAlpha)
 {
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	GLfloat vtx[] = {
 		nX, nY + nHeight,
@@ -474,10 +494,11 @@ void SDLCore::drawCursor(int nColumn, int nLine)
  */
 void SDLCore::clearScreen()
 {
+	SDL_Color bkgd = getColor(m_backgroundColor);
 	glClearColor(
-		((float)m_backgroundColor.r) / 255.0f,
-		((float)m_backgroundColor.g) / 255.0f,
-		((float)m_backgroundColor.b) / 255.0f,
+		((float)bkgd.r) / 255.0f,
+		((float)bkgd.g) / 255.0f,
+		((float)bkgd.b) / 255.0f,
 		1.0f);
 
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -578,67 +599,25 @@ void SDLCore::drawImage(int nX, int nY, const char *sImage)
 /**
  * Draws a string on an arbiturary location of the screen.
  */
-void SDLCore::drawText(int nX, int nY, const char *sText, bool bBold, bool bItalic)
+void SDLCore::drawText(int nX, int nY, const char *sText)
 {
 	if (sText == NULL)
 	{
 		return;
 	}
+	
+	// Match mapping in resetGlyphCache
+	int fnt = 0;
+	if (m_bBold && m_bItalic)
+		fnt = 1;
+	else if (m_bItalic)
+		fnt = 2;
+	else if (m_bBold)
+		fnt = 3;
 
-	TTF_Font *font = m_fontNormal;
-
-	if (bBold && bItalic)
-	{
-		font = m_fontBoldItal;
-	}
-	else if (bItalic)
-	{
-		font = m_fontItal;
-	}
-	else if (bBold)
-	{
-		font = m_fontBold;
-	}
-
-	SDL_Surface* textSurface = TTF_RenderText_Blended(font, sText, m_foregroundColor);
-
-	drawRect(nX, nY, textSurface->w, textSurface->h, m_backgroundColor, 1.0f);
-
-	glColor4f(
-		((float)m_foregroundColor.r) / 255.0f,
-		((float)m_foregroundColor.g) / 255.0f,
-		((float)m_foregroundColor.b) / 255.0f,
-		1.0f);
-
-	if (textSurface == NULL)
-	{
-		syslog(LOG_ERR, "Cannot render text.");
-		return;
-	}
-
-	SDL_SetAlpha(textSurface, 0, 0);
-	drawSurface(nX, nY, textSurface);
-	SDL_FreeSurface(textSurface);
+	drawTextGL(fnt, (int)m_foregroundColor, (int)m_backgroundColor, nX, nY, sText);
 
 	setDirty(BUFFER_DIRTY_BIT);
-}
-
-void SDLCore::setForegroundColor(unsigned char nRed, unsigned char nGreen, unsigned char nBlue)
-{
-	m_foregroundColor.r = nRed;
-	m_foregroundColor.g = nGreen;
-	m_foregroundColor.b = nBlue;
-
-	setDirty(FOREGROUND_COLOR_DIRTY_BIT);
-}
-
-void SDLCore::setBackgroundColor(unsigned char nRed, unsigned char nGreen, unsigned char nBlue)
-{
-	m_backgroundColor.r = nRed;
-	m_backgroundColor.g = nGreen;
-	m_backgroundColor.b = nBlue;
-
-	setDirty(BACKGROUND_COLOR_DIRTY_BIT);
 }
 
 /**
@@ -722,3 +701,24 @@ int SDLCore::getNextPowerOfTwo(int n)
 
 	return it->second;
 }
+
+void SDLCore::resetGlyphCache()
+{
+	int nFonts = 4;
+	TTF_Font* fnts[4];
+
+	// Match mapping in drawText()
+	fnts[0] = m_fontNormal;
+	fnts[1] = m_fontBoldItal;
+	fnts[2] = m_fontItal;
+	fnts[3] = m_fontBold;
+
+	int nCols = TS_COLOR_MAX;
+	SDL_Color cols[nCols];
+	for(unsigned i = 0; i < TS_COLOR_MAX; ++i)
+		cols[i] = getColor((TSColor_t)i);
+
+	setupFontGL(nFonts, (TTF_Font**)fnts, nCols, (SDL_Color*)&cols);
+}
+
+

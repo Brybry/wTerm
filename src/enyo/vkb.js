@@ -10,13 +10,10 @@ enyo.kind({
 	alt: 4,
 	fn: 8,
 	caps: 16,
-	lastPressed: null,
-	repeatIntId: -1,
   	
   	published: {
 		terminal: null,
 		mode: 0,
-		prefs: null
   	},
 
   	components: [
@@ -113,32 +110,11 @@ enyo.kind({
   	
   	keyUp: function(inSender) {
   		this.keyPress(0, inSender.sym, inSender.content)
-		if (this.lastPressed == inSender)
-			this.clearRepeat();
   	},
   	
   	keyDown: function(inSender) {
   		this.keyPress(1, inSender.sym, inSender.content);
-		if (!this.prefs.keyRepeat)
-			return;
-		this.clearRepeat();
-		this.lastPressed = inSender;
-		this.intervalId = setTimeout(this.keyRepeat, 500, this, inSender);
   	},
-
-	clearRepeat: function()
-	{
-		if (this.intervalId != -1)
-		{
-			clearInterval(this.intervalId);
-			this.intervalId = -1;
-		}
-	},
-
-  	keyRepeat: function(context, inSender)
-	{
-		context.intervalId = setInterval(function(){context.keyPress(1, inSender.sym, inSender.content);}, 50)
-	},
 
   	keyPress: function(state,sym,content) {
   		var key = content.split('<br>').reverse()

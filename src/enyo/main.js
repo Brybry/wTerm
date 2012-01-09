@@ -48,8 +48,7 @@ enyo.kind({
 			height: 400,
 		})
 
-		this.prefs.keyRepeat = this.prefs.get("keyRepeat");
-		this.createComponent({kind: 'vkb', name: 'vkb', terminal: this.$.terminal, showing: true, prefs: this.prefs})
+		this.createComponent({kind: 'vkb', name: 'vkb', terminal: this.$.terminal, showing: true})
 		this.createComponent({kind: 'vkbsmall', name: 'vkbsmall', terminal: this.$.terminal, showing: false})
 		this.$.terminal.vkb = this.$.vkb
 		this.$.prefs.terminal = this.$.terminal

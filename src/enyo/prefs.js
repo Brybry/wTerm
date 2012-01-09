@@ -47,12 +47,6 @@ enyo.kind({
 					{name: 'color7Bright', kind: 'wi.InputColor', caption: 'Color7 Bright', onChanged: 'updateColors'},
 					{name: 'color8Bright', kind: 'wi.InputColor', caption: 'Color8 Bright', onChanged: 'updateColors'},
 				]},
-	  			{kind: "RowGroup", caption: 'Input', flex: 1, components: [
-					{kind: 'Item', layoutKind: 'HFlexLayout', align: "center", components: [
-						{kind: "ToggleButton", name: 'keyRepeatToggle', flex: 1, onLabel: 'On', offLabel: 'Off', onChange: 'updateKeyRepeat'},
-						{content: "Key Repeat", style: 'padding-right: 10px'}
-					]}
-				]},
 	  		]},
 			{kind: "Toolbar", className: 'enyo-toolbar-light', align: "center", showing: true, components: [
 				{name: "dragHandle", kind: "GrabButton", onclick: "close"},
@@ -134,10 +128,6 @@ enyo.kind({
 			items.push(colorScheme)
 		this.$.colorSchemes.setItems(items)
 		this.$.colorSchemes.setValue(this.prefs.get('colorScheme'))
-	},
-	updateKeyRepeat: function(inSender, inState) {
-		this.prefs.set('keyRepeat', inState);
-		this.prefs.keyRepeat = inState;
 	},
 	rendered: function() {
 		this.getColors()

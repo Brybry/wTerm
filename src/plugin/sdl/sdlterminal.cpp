@@ -366,7 +366,7 @@ void SDLTerminal::handleKeyboardEvent(SDL_Event &event)
 				c[0] = (unicode & 0x7F);
 
 				//Screen area takes precedence over Sym key.
-				if (m_bCtrlKeyModHeld || m_keyMod == TERM_KEYMOD_CTRL)
+				if ((mod & KMOD_CTRL) || m_bCtrlKeyModHeld || m_keyMod == TERM_KEYMOD_CTRL)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_CTRL, c[0]);
 				}
@@ -374,11 +374,11 @@ void SDLTerminal::handleKeyboardEvent(SDL_Event &event)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_FN, c[0]);
 				}
-				else if ((mod & KMOD_ALT) == 0 && m_keyMod == TERM_KEYMOD_ALT)
+				else if ((mod & KMOD_ALT) || m_keyMod == TERM_KEYMOD_ALT)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_ALT, c[0]);
 				}
-				else if ((mod & KMOD_SHIFT) == 0 && m_keyMod == TERM_KEYMOD_SHIFT)
+				else if ((mod & KMOD_SHIFT) || m_keyMod == TERM_KEYMOD_SHIFT)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_SHIFT, c[0]);
 				}

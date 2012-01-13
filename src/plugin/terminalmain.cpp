@@ -27,6 +27,12 @@
 
 SDLTerminal *sdlTerminal;
 
+PDL_bool setBtKeyboard(PDL_JSParameters *params)
+{
+	sdlTerminal->setBtKeyboardAddress(strdup(PDL_GetJSParamString(params,0)));
+	return PDL_TRUE;
+}
+
 PDL_bool setColor(PDL_JSParameters *params) {
 
 	TSColor_t color = (TSColor_t)PDL_GetJSParamInt(params, 0);
@@ -105,6 +111,7 @@ int main(int argc, const char* argv[])
 	PDL_RegisterJSHandler("getDimensions", getDimensions);
 	PDL_RegisterJSHandler("getFontSize", getFontSize);
 	PDL_RegisterJSHandler("setFontSize", setFontSize);
+	PDL_RegisterJSHandler("setBtKeyboard", setBtKeyboard);
 
 	PDL_JSRegistrationComplete();
 	PDL_CallJS("ready", NULL, 0);

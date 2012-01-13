@@ -23,6 +23,7 @@
 #include <SDL/SDL.h>
 #include <SDL/SDL_ttf.h>
 #include <map>
+#include <lunaservice.h>
 
 #include "terminal/vtterminalstate.hpp"
 #include "sdlfontgl.h"
@@ -57,6 +58,12 @@ protected:
 	virtual void handleKeyboardEvent(SDL_Event &event);
 	virtual void handleMouseEvent(SDL_Event &event);
 
+	GMainLoop *m_gmainLoop;
+	GMainContext *m_gmainContext;
+	LSHandle *m_lsHandle;
+	LSError m_lserror;
+	bool m_lsEnabled;
+
 private:
 	bool m_bRunning;
 
@@ -89,6 +96,7 @@ private:
 
 	int init();
 	int initOpenGL();
+	int initLSClient();	
 	void shutdown();
 	void eventLoop();
 

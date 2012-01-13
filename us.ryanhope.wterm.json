@@ -1,0 +1,20 @@
+{
+    "role": {
+    "exeName":"/media/cryptofs/apps/usr/palm/applications/us.ryanhope.wterm/wterm",
+    "type": "privileged",
+    "allowedNames": ["us.ryanhope.wterm","us.ryanhope.wterm.plugin"]
+    },
+    "permissions": [
+        {
+         "service":"us.ryanhope.wterm",
+         "outbound":["*","com.palm.audio","com.palm.mediad","com.palm.hidd","com.palm.applicationManager","com.palm.location","com.palm.deviceprofile","com.palm.connectionmanager","com.palm.vibrate"],
+         "inbound":["*"]
+        },
+        {
+         "service":"us.ryanhope.wterm.plugin",
+         "outbound":["*"],
+         "inbound":["*"]
+        }
+    ]
+}
+

@@ -48,19 +48,20 @@ enyo.kind({
 			height: 400,
 		})
 		this.createComponent({
-			name : "getPreferencesCall",
-			kind : "PalmService",
-			service : "palm://com.palm.systemservice/",
-			method : "getPreferences",
-			onSuccess : "prefCallSuccess",
+			name: "getPreferencesCall",
+			kind: "PalmService",
+			service: "palm://com.palm.systemservice/",
+			method: "getPreferences",
+			onSuccess: "prefCallSuccess",
 		})
 		this.createComponent({kind: 'vkb', name: 'vkb', terminal: this.$.terminal, showing: true})
 		this.createComponent({kind: 'vkbsmall', name: 'vkbsmall', terminal: this.$.terminal, showing: false})
 		this.$.terminal.vkb = this.$.vkb
 		this.$.prefs.terminal = this.$.terminal
 		this.setup()
-		// fix the keyboard if orientation is locked
-		this.$.getPreferencesCall.call({"keys":["rotationLock"]});
+		
+		var callback = enyo.bind(this, 'updateBtKeyboardStatus');
+		this.$.terminal.$.plugin.addCallback('btKeyboardStatus', callback);
 	},
 
 	prefCallSuccess: function(inSender, inResponse) {
@@ -117,6 +118,7 @@ enyo.kind({
 			//this.$.messages.hasNode();
 			//this.$.prefs.domStyles['height'] = this.$.messages.node.clientHeight + 'px';
 			this.$.prefs.open();
+			this.$.prefs.$.getDevices.call({});
 			//this.$.nicks.render();
 		}
 	},
@@ -140,6 +142,27 @@ enyo.kind({
 			else
 				this.$.terminal.resize(window.innerWidth, window.innerHeight)
 		}
-	}
+		// fix the keyboard if orientation is locked
+		this.$.getPreferencesCall.call({"keys":["rotationLock"]});
+	},
+
+	updateBtKeyboardStatus: function(status) {
+		this.showVKB = !(status === 'true');
+		try {
+			if (this.showVKB)
+				this.$.vkbToggle.setCaption('Hide Virtual Keyboard');
+			else
+				this.$.vkbToggle.setCaption('Show Virtual Keyboard');
+		} 
+		catch (e) { this.log("FIX THIS: "+e);}
+		this.setup();
+		if (!this.showVKB)
+		{
+//			this.$.terminal.$.plugin.focus();
+			if (this.$.terminal.$.plugin.hasNode())
+				this.$.terminal.$.plugin.node.focus();
+		}
+	},
+
 
 })

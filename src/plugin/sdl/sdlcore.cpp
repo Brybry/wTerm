@@ -50,7 +50,11 @@ SDLCore::SDLCore()
 	m_nFontHeight = 0;
 	m_nFontWidth = 0;
 
-	
+	m_gmainLoop = NULL;
+	m_gmainContext = NULL;
+	m_lsHandle = NULL;
+	m_lsEnabled = false;
+
 	m_keyRepeat.firsttime = 0;
 	m_keyRepeat.delay = 500; // 500
 	m_keyRepeat.interval = 35; // 35
@@ -65,6 +69,10 @@ SDLCore::~SDLCore()
 	{
 		shutdown();
 	}
+	// TODO: figure out if LSErrorFree needs to be called here.
+	// TODO: figure out if g_main_loop_unref needs to be called here
+	// TODO: figure out if LSUnregister needs to be called (or if it even does anything)
+	// TODO: figure out if m_lsHandle and m_lserror need to be freed
 }
 
 /**
@@ -76,6 +84,12 @@ int SDLCore::init()
 	if (SDL_Init(SDL_INIT_VIDEO) != 0)
 	{
 		syslog(LOG_ERR, "Cannot initialize SDL: %s", SDL_GetError());
+		return -1;
+	}
+
+	if (initLSClient() != 0)
+	{
+		syslog(LOG_ERR,"Cannot initialize LunaService client");
 		return -1;
 	}
 
@@ -117,6 +131,49 @@ int SDLCore::init()
 		return -1;
 	}
 
+	return 0;
+}
+
+int SDLCore::initLSClient()
+{
+	bool retVal = false;
+	LSErrorInit(&m_lserror);
+
+	// TODO: this shouldn't be hardcoded
+	retVal = LSRegisterPubPriv("us.ryanhope.wterm.plugin", &m_lsHandle, false, &m_lserror);
+	
+	if (!retVal)
+	{
+		syslog(LOG_ERR,"LSRegister failed: %i %s :: [%i] %s {%s}", 
+			m_lserror.error_code, m_lserror.message, m_lserror.line, m_lserror.file, m_lserror.func);
+		return 0;
+	}
+	else
+	{
+		syslog(LOG_ERR,"Handle created: %s", LSHandleGetName(m_lsHandle));
+	}
+	
+	m_gmainContext = g_main_context_default(); // this is actually unneeded as g_main_context_iteration was working fine with NULL
+	m_gmainLoop = g_main_loop_new(m_gmainContext, FALSE);
+	if (m_gmainLoop == NULL)
+	{
+		syslog(LOG_ERR,"gmainLoop NULL -- failed new");
+		return -1;
+	}
+
+	retVal = LSGmainAttach(m_lsHandle, m_gmainLoop, &m_lserror);
+	if (!retVal)
+	{
+		syslog(LOG_ERR,"LSGmainAttach failed: %i %s :: [%i] %s {%s}", 
+			m_lserror.error_code, m_lserror.message, m_lserror.line, m_lserror.file, m_lserror.func);
+		return -1;
+	}
+	else
+	{
+		syslog(LOG_ERR,"m_gmainLoop attached");
+	}
+	
+	m_lsEnabled = true;
 	return 0;
 }
 
@@ -259,7 +316,7 @@ void SDLCore::eventLoop()
 		// the screen as dirty and force a refresh.  We should never end up trying
 		// to draw faster than a controlled amount in all cases.
 
-		bool gotEvent = false;
+/*		bool gotEvent = false;
 		if (!m_keyRepeat.timestamp)
 		{
 			SDL_WaitEvent(&event);
@@ -269,8 +326,9 @@ void SDLCore::eventLoop()
 			gotEvent = SDL_PollEvent(&event);
 
 		if (gotEvent)
-		{
-		do {
+		{*/
+	while (SDL_PollEvent(&event))
+	{
 			switch (event.type)
 			{
 				case SDL_MOUSEMOTION:
@@ -302,10 +360,11 @@ void SDLCore::eventLoop()
 				default:
 					break;
 			}
-		} while (SDL_PollEvent(&event));
 		}
+//		}
 		checkKeyRepeat();
-		
+		if (m_lsEnabled)
+			g_main_context_iteration(m_gmainContext,false); // I need to redo the loop for this to get picked up better
 
 		if (isDirty(FONT_DIRTY_BIT))
 		{
@@ -382,7 +441,7 @@ void SDLCore::closeFonts()
 		TTF_CloseFont(m_fontBold);
 		m_fontBold = NULL;
 	}
-
+	
 	if (m_fontUnder != NULL)
 	{
 		TTF_CloseFont(m_fontUnder);

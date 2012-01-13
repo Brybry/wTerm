@@ -42,6 +42,8 @@ SDLTerminal::SDLTerminal()
 	m_bCtrlKeyModHeld = false;
 	m_bKeyModUsed = true;
 	m_bKeyModLocked = false;
+	m_btKeyboardAttached = false;
+	m_btKeyboardAddress = NULL;
 	m_config = new TerminalConfigManager();
 
 	m_keyModShiftSurface = NULL;
@@ -132,6 +134,11 @@ SDLTerminal::~SDLTerminal()
 		SDL_FreeSurface(m_keyModFnLockedSurface);
 	}
 
+	if (m_btKeyboardAddress != NULL)
+	{
+		free(m_btKeyboardAddress);
+	}
+
 	if (m_config != NULL)
 	{
 		delete m_config;
@@ -148,6 +155,172 @@ void SDLTerminal::updateDisplaySize()
 		if (extTerminal != NULL)
 			extTerminal->setWindowSize(getMaximumColumnsOfText(), getMaximumLinesOfText());
 	}
+}
+
+bool btNotifyCallback(LSHandle *sh, LSMessage *reply, void *ctx)
+{
+//	syslog(LOG_ERR, "DEBUG NOTIFY: %s", LSMessageGetPayload(reply));
+	if (reply == NULL)
+	{
+		syslog(LOG_ERR,"btNotifyCallback Reply null");
+		return true;
+	}
+
+	json_t *message = NULL;
+	message = json_parse_document((char *)LSMessageGetPayload(reply));
+	if (message == NULL)
+	{
+		syslog(LOG_ERR,"btNotifyCallback: Failed to load JSON message");
+		return true;
+	}
+	
+	// subscription reply checking
+	json_t *params = json_find_first_label(message, "returnValue");
+	
+	if (params != NULL && params->child != NULL)
+	{
+	
+		if (params->child->type != JSON_TRUE)
+			return true;
+
+		json_t *subparam = json_find_first_label(message,"subscribed");
+		if (subparam == NULL || subparam->child == NULL)
+		{
+//			syslog(LOG_ERR,"btNotifyCallback: returnValue but no subscribe message");
+			return true;
+		}
+	
+		if (subparam->child->type == JSON_TRUE)
+		{
+//			syslog(LOG_ERR,"btNotifyCallback: subscribed: true");
+			return true;
+		}
+//		syslog(LOG_ERR,"btNotifyCallback: subscribed: false");
+		return true;
+	}
+	
+
+	SDLTerminal *context = (SDLTerminal *)ctx;
+	if (context == NULL)
+	{
+		syslog(LOG_ERR,"btDevicesCallback context null");
+		return true;
+	}
+
+	// notification message checking {"notification":"notifn[dis]connected"}
+	params = json_find_first_label(message, "notification");
+	if (params == NULL || params->child == NULL || params->child->text == NULL)
+		return true;
+
+	json_t *addparam = json_find_first_label(message,"address");
+
+	// do things look like {"address":"00:00:00:00:00:00"}?
+	if (addparam == NULL || addparam->child == NULL || addparam->child->text == NULL)
+		return true;
+	if (strcmp(addparam->child->text, context->getBtKeyboardAddress()) != 0)
+		return true;
+	if (strcmp(params->child->text, "notifnconnected") == 0)  
+	{
+		syslog(LOG_ERR,"btNotifyCallback: keyboard notifnconnected caught");
+		context->setBtKeyboardAttached(true);
+		const char *params[1] = {"true"};
+		PDL_CallJS("btKeyboardStatus", params, 1);
+	}
+	else if (strcmp(params->child->text, "notifndisconnected") == 0)
+	{
+		syslog(LOG_ERR,"btNotifyCallback: keyboard notifndisconnected caught");
+		context->setBtKeyboardAttached(false);
+		const char *params[1] = {"false"};
+		PDL_CallJS("btKeyboardStatus", params, 1);
+	}
+	return true;
+}
+
+bool btDevicesCallback(LSHandle *sh, LSMessage *reply, void *ctx)
+{
+//	syslog(LOG_ERR, "DEBUG: %s", LSMessageGetPayload(reply));
+
+	if (reply == NULL)
+	{
+		syslog(LOG_ERR,"Reply null");
+		return true;
+	}
+
+	SDLTerminal *context = (SDLTerminal *)ctx;
+	if (context == NULL)
+	{
+		syslog(LOG_ERR,"btDevicesCallback context null");
+		return true;
+	}
+
+	json_t *message = NULL;
+	message = json_parse_document((char *)LSMessageGetPayload(reply));
+	if (message == NULL) // probably shouldn't do this because empty reply may be valid
+	{
+		syslog(LOG_ERR,"btDevicesCallback: Failed to load JSON message");
+		return true;
+	}
+	
+	json_t *params = json_find_first_label(message, "returnValue");
+	
+	// no returnValue object
+	if (params == NULL || params->child == NULL)
+		return true;
+	
+	// returnValue:false
+	if (params->child->type != JSON_TRUE)
+		return true;
+
+	if (params->next == NULL || params->next->child == NULL)
+	{
+//		syslog(LOG_ERR,"btDevicesCallback: array label or array null");
+		return true;
+	}
+
+	params = params->next->child; // the array (params->next would be the array label)
+			
+	if (params->child == NULL)
+	{
+//		syslog(LOG_ERR,"btDevicesCallback: array object null");
+		return true;
+	}
+
+	// become the first object inside array, while not null continue to next object
+	for (params = params->child; params != NULL; params = params->next)
+	{
+		 json_t *status = json_find_first_label(params, "status");
+
+		// do things look like {"status":"[dis]connected"}?
+		if (status == NULL || status->child == NULL || status->child->text == NULL)
+			continue;
+
+		 json_t *addparam = json_find_first_label(params,"address");
+
+		// do things look like {"address":"00:00:00:00:00:00"}?
+		if (addparam == NULL || addparam->child == NULL || addparam->child->text == NULL)
+			continue;
+
+		if (strcmp(addparam->child->text, context->getBtKeyboardAddress()) != 0)
+			continue;
+
+		if (strcmp(status->child->text, "connected") == 0)  
+		{
+			syslog(LOG_ERR,"btDevicesCallback: keyboard connected caught");
+			context->setBtKeyboardAttached(true);
+			const char *params[1] = {"true"};
+			PDL_CallJS("btKeyboardStatus", params, 1);
+			return true;
+		}
+		else if (strcmp(status->child->text, "disconnected") == 0)
+		{
+			syslog(LOG_ERR,"btDevicesCallback: keyboard disconnected caught");
+			context->setBtKeyboardAttached(false);
+			const char *params[1] = {"false"};
+			PDL_CallJS("btKeyboardStatus", params, 1);
+			return true;
+		}
+	}
+	return true;
 }
 
 int SDLTerminal::initCustom()
@@ -196,10 +369,61 @@ int SDLTerminal::initCustom()
 	SDL_SetAlpha(m_keyModAltLockedSurface, 0, 0);
 	SDL_SetAlpha(m_keyModFnLockedSurface, 0, 0);
 
+	if (m_lsEnabled)
+	{
+		bool retVal = false;
+
+		retVal = LSCall(m_lsHandle, "palm://com.palm.bluetooth/prof/subscribenotifications",
+			"{\"subscribe\":true}", btNotifyCallback, this, NULL, &m_lserror);
+
+		if (!retVal)
+			syslog(LOG_ERR,"LSCall subscribenotifications failed");
+	}
+
 	setReady(true);
 
 	return 0;
 }
+
+void SDLTerminal::setBtKeyboardAttached(bool isAttached)
+{
+	m_btKeyboardAttached = isAttached;
+}
+
+bool SDLTerminal::getBtKeyboardAttached()
+{
+	return m_btKeyboardAttached;
+}
+
+const char *SDLTerminal::getBtKeyboardAddress()
+{
+	if (m_btKeyboardAddress == NULL)
+		return "";
+	return m_btKeyboardAddress;
+}
+
+void SDLTerminal::setBtKeyboardAddress(char *address)
+{
+	if (address == NULL)
+		return;
+
+	if (m_btKeyboardAddress != NULL)
+	{
+		free(m_btKeyboardAddress);
+		m_btKeyboardAddress = NULL;
+	}
+	m_btKeyboardAddress = address;
+
+	// updated device connection state
+	if (m_lsEnabled)
+	{
+		bool retVal = LSCall(m_lsHandle, "palm://com.palm.bluetooth/gap/gettrusteddevices",
+				"{}", btDevicesCallback, this, NULL, &m_lserror);
+		if (!retVal)
+			syslog(LOG_ERR,"LSCall gettrusteddevices failed");
+	}
+}
+
 
 void SDLTerminal::toggleKeyMod(Term_KeyMod_t keyMod)
 {
@@ -254,7 +478,6 @@ void SDLTerminal::handleKeyboardEvent(SDL_Event &event)
 	SDLMod mod = event.key.keysym.mod;
 	Uint16 unicode = event.key.keysym.unicode;
 	bool bPrint = true;
-
 	ExtTerminal *extTerminal = getExtTerminal();
 
 	if (extTerminal == NULL || !extTerminal->isReady())
@@ -303,6 +526,22 @@ void SDLTerminal::handleKeyboardEvent(SDL_Event &event)
 			else if (sym == SDLK_LEFT)
 			{
 				m_terminalState->sendCursorCommand(VTTS_CURSOR_LEFT, extTerminal);
+			}
+			else if ((sym == 19 || sym == 0xE0A0) && getBtKeyboardAttached())
+			{
+				m_terminalState->sendCursorCommand(VTTS_CURSOR_UP, extTerminal);
+			}
+			else if ((sym == 21 || sym == 0xE0A1) && getBtKeyboardAttached())
+			{
+				m_terminalState->sendCursorCommand(VTTS_CURSOR_DOWN, extTerminal);
+			}
+			else if ((sym == 18 || sym == 0xE0A2) && getBtKeyboardAttached())
+			{
+				m_terminalState->sendCursorCommand(VTTS_CURSOR_LEFT, extTerminal);
+			}
+			else if ((sym == 20 || sym == 0xE0A3) && getBtKeyboardAttached())
+			{
+				m_terminalState->sendCursorCommand(VTTS_CURSOR_RIGHT, extTerminal);
 			}
 			else if (sym == SDLK_F1)
 			{
@@ -370,15 +609,16 @@ void SDLTerminal::handleKeyboardEvent(SDL_Event &event)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_CTRL, c[0]);
 				}
-				else if ((mod & KMOD_MODE) || m_keyMod == TERM_KEYMOD_FN)
+				else if ((mod & KMOD_MODE) && m_keyMod == TERM_KEYMOD_FN)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_FN, c[0]);
 				}
-				else if ((mod & KMOD_ALT) || m_keyMod == TERM_KEYMOD_ALT)
+				else if ((mod & KMOD_ALT) && m_keyMod == TERM_KEYMOD_ALT)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_ALT, c[0]);
 				}
-				else if ((mod & KMOD_SHIFT) || m_keyMod == TERM_KEYMOD_SHIFT)
+				// something should be done about this so that the vkb can hold shift but not mess up bluetooth/other keyboards with shift
+				else if ((mod & KMOD_SHIFT) && m_keyMod == TERM_KEYMOD_SHIFT)
 				{
 					nKey = m_config->getKeyBinding(TERM_KEYMOD_SHIFT, c[0]);
 				}

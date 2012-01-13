@@ -24,6 +24,7 @@ enyo.kind({
 			onPluginReady: 'pluginReady',
 			onPluginConnected: 'pluginConnected',
 			onPluginDisconnected: 'pluginDisconnected',
+			allowKeyboardFocus: true,
 			width: this.width,
 			height: this.height,
 			params: [this.prefs.get('fontSize').toString(10)]
@@ -33,6 +34,8 @@ enyo.kind({
   	pluginReady: function(inSender, inResponse, inRequest) {
   		this.log('~~~~~ Terminal Plugin Ready ~~~~~')
 		this.setColors()
+		this.setBtKeyboard();
+//		this.$.plugin.setAttribute("tabIndex", 1);
   		//this.doPluginReady()
   	},
   	pluginConnected: function(inSender, inResponse, inRequest) {
@@ -41,7 +44,6 @@ enyo.kind({
   	pluginDisconnected: function(inSender, inResponse, inRequest) {
   		this.log('~~~~~ Terminal Plugin Disconnected ~~~~~')
   	},
-
   	pushKeyEvent: function(type,state,sym,unicode) {
   		this.log(type,state,sym)
   		this.$.plugin.callPluginMethod('pushKeyEvent',type,state,sym,unicode)
@@ -69,6 +71,14 @@ enyo.kind({
   	setFontSize: function(fontSize) {
   		return parseInt(this.$.plugin.callPluginMethod('setFontSize', fontSize),10)
   	},
+
+	setBtKeyboard: function() {
+		var btKeyboardAddress = this.prefs.get('btKeyboard');
+		if (btKeyboardAddress == -1)
+			btKeyboardAddress = '\0';
+		return parseInt(this.$.plugin.callPluginMethod('setBtKeyboard', btKeyboardAddress),10)
+	},
+
   	hsvToRgb: function(h, s, v) {
 		var r, g, b;
 		var i;

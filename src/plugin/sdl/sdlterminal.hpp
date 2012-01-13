@@ -37,6 +37,7 @@ protected:
 	bool m_bKeyModUsed;
 	bool m_bKeyModLocked;
 	bool m_bCtrlKeyModHeld;
+	bool m_btKeyboardAttached;
 
 	SDL_Surface *m_keyModShiftSurface;
 	SDL_Surface *m_keyModCtrlSurface;
@@ -55,11 +56,11 @@ protected:
 
 private:
 	SDL_Color m_colors[TS_COLOR_MAX];
+	char *m_btKeyboardAddress; // SUPER TEMPORARY
 
 public:
 	SDLTerminal();
 	virtual ~SDLTerminal();
-
 	void refresh();
 
 	void redraw();
@@ -71,7 +72,10 @@ public:
 	void setForegroundColor(TSColor_t color);
 	void setBackgroundColor(TSColor_t color);
 	void setGraphicsState(TSLineGraphicsState_t &state);
-
+	void setBtKeyboardAttached(bool isAttached = true);
+	bool getBtKeyboardAttached();
+	const char *getBtKeyboardAddress();
+	void setBtKeyboardAddress(char *address);
 	void updateDisplaySize();
 };
 

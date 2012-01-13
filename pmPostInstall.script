@@ -8,6 +8,8 @@ APPS=/media/cryptofs/apps
 
 APPDIR=${APPS}/usr/palm/applications/${APPID}
 
+/bin/cp -f ${APPDIR}/${APPID}.json /var/palm/ls2/roles/prv/${APPID}.json
+
 sed -i -e "/:${APPID}:/d" /var/palm/data/jailusers
 
 JUID=5200

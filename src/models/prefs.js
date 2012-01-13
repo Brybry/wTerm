@@ -2,6 +2,7 @@ function Prefs() {
 	
 	this.defaults = {
 		fontSize: 12,
+		btKeyboard: -1,
 		colorScheme: 'Linux Colors',
 		colorSchemes: {
 			'Linux Colors': [

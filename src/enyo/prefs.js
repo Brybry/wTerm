@@ -8,6 +8,7 @@ enyo.kind({
 		terminal: null
 	},
 	lazy: false,
+	btDevices: new Array(),
 	components: [
 		{name: "shadow", className: "enyo-sliding-view-shadow"},
 		{kind: "VFlexBox", height: "100%", components: [
@@ -47,12 +48,23 @@ enyo.kind({
 					{name: 'color7Bright', kind: 'wi.InputColor', caption: 'Color7 Bright', onChanged: 'updateColors'},
 					{name: 'color8Bright', kind: 'wi.InputColor', caption: 'Color8 Bright', onChanged: 'updateColors'},
 				]},
-	  		]},
+	  			{kind: "RowGroup", caption: 'Bluetooth Keyboard', flex: 1, components: [
+					{kind: "CustomListSelector", name: 'deviceList', allowHtml: true, onmousedown: 'refreshDeviceList', onChange: 'updateBtKeyboard', flex: 1},
+				]},
+			]},
+
 			{kind: "Toolbar", className: 'enyo-toolbar-light', align: "center", showing: true, components: [
 				{name: "dragHandle", kind: "GrabButton", onclick: "close"},
 				{kind: 'Button', caption: 'Restore Defaults', disabled: true}
 			]}
-		]}
+		]},
+		{
+			name: "getDevices",
+			kind: "PalmService",
+			service: "palm://com.palm.bluetooth/gap/",
+			method: "gettrusteddevices",
+			onSuccess: "getDevicesSuccess",
+		}
 	],
 	flyInFromChanged: function() {
 		this.inherited(arguments);
@@ -129,6 +141,15 @@ enyo.kind({
 		this.$.colorSchemes.setItems(items)
 		this.$.colorSchemes.setValue(this.prefs.get('colorScheme'))
 	},
+	updateBtKeyboard: function(inSender, inValue, inOldValue) {
+		console.log("Update btKeyboard: insender, value, old, pref"+inSender+"-"+inValue+"-"+inOldValue+'-'+this.prefs.get('btKeyboard'));
+		if (inValue)
+		{
+			this.prefs.set('btKeyboard',inValue);
+			this.terminal.setBtKeyboard();
+		}
+		console.log("Update btKeyboard done: pref "+this.prefs.get('btKeyboard'));
+	},
 	rendered: function() {
 		this.getColors()
 		this.$.fontSize.setValue(this.prefs.get('fontSize'))
@@ -138,5 +159,61 @@ enyo.kind({
 		this.prefs.set('colorScheme', this.$.colorSchemes.getValue())
 		this.terminal.setColors()
 		this.getColors()
-	}
+	},
+	refreshDeviceList: function()
+	{
+		// this needs to do something graphical to make the selector actually look disabled
+		this.$.deviceList.disabled = true; 
+		this.$.getDevices.call({});
+	},
+	getDevicesSuccess: function(inSender, inResponse) {
+		this.btDevices.length = 0;
+		this.btDevices.push({"caption":"None", "value":-1});
+
+		if (!inResponse.trusteddevices)
+		{
+			this.$.deviceList.setItems(this.btDevices);
+			this.$.deviceList.setValue(this.prefs.get('btKeyboard'));
+			return;
+		}
+
+		for (var dIndex in inResponse.trusteddevices) 
+		{
+			var btDevice = {};
+			for (var key in inResponse.trusteddevices[dIndex]) 
+			{
+				switch (key)
+				{
+					case "address": 
+						btDevice["value"] = inResponse.trusteddevices[dIndex][key];
+						break;
+					case "cod": 
+						btDevice["cod"] = inResponse.trusteddevices[dIndex][key];
+						break;
+					case "name": 
+						btDevice["caption"] = inResponse.trusteddevices[dIndex][key];
+					case "status": 
+						btDevice["connected"] = (inResponse.trusteddevices[dIndex][key] === "connected" );
+						break;
+					default:
+						break;
+				}
+			}
+
+			if (btDevice["connected"])
+			{
+				btDevice["style"] = "font-weight: bold;";
+			}
+
+			if (btDevice["cod"] & 0x2540)
+			{
+				btDevice["caption"] += " [K]";
+			}
+
+			this.btDevices.push(btDevice);
+		}
+		this.$.deviceList.setItems(this.btDevices);
+		this.$.deviceList.setValue(this.prefs.get('btKeyboard'));
+		this.$.deviceList.disabled = false;
+	},
 })

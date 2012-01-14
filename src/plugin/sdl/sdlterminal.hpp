@@ -25,6 +25,9 @@
 #include "terminal/vtterminalstate.hpp"
 #include "terminal/terminalconfigmanager.hpp"
 
+#include <vector>
+#include <string>
+
 /**
  * SDL Terminal front end.
  */
@@ -53,10 +56,12 @@ protected:
 	int initCustom();
 	void toggleKeyMod(Term_KeyMod_t keyMod);
 	void disableKeyMod();
+	void initCharsets();
 
 private:
 	SDL_Color m_colors[TS_COLOR_MAX];
-	char *m_btKeyboardAddress; // SUPER TEMPORARY
+	char *m_btKeyboardAddress;
+	std::vector<std::string> m_keys;
 
 public:
 	SDLTerminal();
@@ -69,6 +74,7 @@ public:
 
 	SDL_Color getColor(TSColor_t color);
 	void setColor(TSColor_t color, int r, int g, int b);
+	void setKey(TSInput_t key, const char *command);
 	void setForegroundColor(TSColor_t color);
 	void setBackgroundColor(TSColor_t color);
 	void setGraphicsState(TSLineGraphicsState_t &state);

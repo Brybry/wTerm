@@ -9,6 +9,7 @@ enyo.kind({
 		vkb: null,
 		prefs: null,
 		currentColors: [],
+		currentKeys: [],
 	},
 		
 	events: {
@@ -36,6 +37,7 @@ enyo.kind({
 		this.setColors()
 		this.setBtKeyboard();
 //		this.$.plugin.setAttribute("tabIndex", 1);
+		this.setKeys()
   		//this.doPluginReady()
   	},
   	pluginConnected: function(inSender, inResponse, inRequest) {
@@ -45,14 +47,13 @@ enyo.kind({
   		this.log('~~~~~ Terminal Plugin Disconnected ~~~~~')
   	},
   	pushKeyEvent: function(type,state,sym,unicode) {
-  		this.log(type,state,sym)
-  		this.$.plugin.callPluginMethod('pushKeyEvent',type,state,sym,unicode)
+  		return parseInt(this.$.plugin.callPluginMethod('pushKeyEvent',type,state,sym,unicode))
   	},
   	keyDown: function(sym,unicode) {
-  		this.pushKeyEvent(1,sym,unicode)
+  		return this.pushKeyEvent(1,sym,unicode)
   	},
   	keyUp: function(sym,unicode) {
-  		this.pushKeyEvent(0,sym,unicode)
+  		return this.pushKeyEvent(0,sym,unicode)
   	},
   	
   	resize: function(width, height) {
@@ -60,6 +61,9 @@ enyo.kind({
   		this.$.plugin.setHeight(height)
   	},
   	
+	cancelKeyRepeat: function() {
+		this.$.plugin.callPluginMethod('cancelKeyRepeat')
+	},
   	getDimensions: function() {
   		return enyo.json.parse(this.$.plugin.callPluginMethod('getDimensions'))
   	},
@@ -157,6 +161,20 @@ enyo.kind({
 			this.currentColors[17] = this.currentColors[19] = this.hsvToRgb(Math.floor(Math.random()*256),34,247)
   		for (i in this.currentColors)
   			this.$.plugin.callPluginMethod('setColor', i, this.currentColors[i][0], this.currentColors[i][1], this.currentColors[i][2])
+  	},
+  	
+  	decodeEscape: function(str) {
+  		return str.replace(/\\x([0-9A-Fa-f]{2})/g, function() {
+	        return String.fromCharCode(parseInt(arguments[1], 16));
+	    });
+  	},
+  	
+  	setKeys: function() {
+  		var inputScheme = this.prefs.get('inputScheme')
+		var inputSchemes = this.prefs.get('inputSchemes')
+		this.currentKeys = inputSchemes[inputScheme]
+		for (i in this.currentKeys)
+			this.$.plugin.callPluginMethod('setKey', i, this.decodeEscape(this.currentKeys[i]))
   	}
   	
 })

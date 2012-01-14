@@ -33,6 +33,11 @@ PDL_bool setBtKeyboard(PDL_JSParameters *params)
 	return PDL_TRUE;
 }
 
+PDL_bool setKey(PDL_JSParameters *params) {
+	sdlTerminal->setKey((TSInput_t)PDL_GetJSParamInt(params, 0), PDL_GetJSParamString(params, 1));
+	return PDL_TRUE;
+}
+
 PDL_bool setColor(PDL_JSParameters *params) {
 
 	TSColor_t color = (TSColor_t)PDL_GetJSParamInt(params, 0);
@@ -83,13 +88,23 @@ PDL_bool pushKeyEvent(PDL_JSParameters *params) {
 
 	event.type = type ? SDL_KEYDOWN : SDL_KEYUP;
 	event.key.type = type ? SDL_KEYDOWN : SDL_KEYUP;
-	event.key.state = type ? SDL_PRESSED : SDL_RELEASED;
-	event.key.keysym.mod = SDL_GetModState();
 	event.key.keysym.sym = (SDLKey)PDL_GetJSParamInt(params, 1);
 	event.key.keysym.unicode = PDL_GetJSParamString(params, 2)[0];
 
 	sdlTerminal->fakeKeyEvent(event);
 
+	char *reply = 0;
+	asprintf(&reply, "%d", SDL_GetModState());
+	syslog(LOG_ERR, "MODSTATE: %s", reply);
+	PDL_JSReply(params, reply);
+	free(reply);
+
+	return PDL_TRUE;
+}
+
+PDL_bool cancelKeyRepeat(PDL_JSParameters *params) {
+
+	sdlTerminal->stopKeyRepeat();
 	return PDL_TRUE;
 }
 
@@ -97,6 +112,7 @@ int main(int argc, const char* argv[])
 {
 
 	openlog("us.ryanhope.wterm.plugin", LOG_PID, LOG_USER);
+	setlogmask(LOG_UPTO((argc > 2 && atoi(argv[2])>=LOG_EMERG && atoi(argv[2])<=LOG_DEBUG) ? atoi(argv[2]) : LOGLEVEL));
 
 	PDL_Init(0);
 
@@ -104,14 +120,16 @@ int main(int argc, const char* argv[])
 	Terminal *terminal = new Terminal();
 
 	sdlTerminal->start();
-	sdlTerminal->setFontSize((argc == 2 && atoi(argv[1])) ? atoi(argv[1]) : 12);
+	sdlTerminal->setFontSize((argc > 1 && atoi(argv[1])) ? atoi(argv[1]) : 12);
 
+	PDL_RegisterJSHandler("setKey", setKey);
 	PDL_RegisterJSHandler("setColor", setColor);
 	PDL_RegisterJSHandler("pushKeyEvent", pushKeyEvent);
 	PDL_RegisterJSHandler("getDimensions", getDimensions);
 	PDL_RegisterJSHandler("getFontSize", getFontSize);
 	PDL_RegisterJSHandler("setFontSize", setFontSize);
 	PDL_RegisterJSHandler("setBtKeyboard", setBtKeyboard);
+	PDL_RegisterJSHandler("cancelKeyRepeat", cancelKeyRepeat);
 
 	PDL_JSRegistrationComplete();
 	PDL_CallJS("ready", NULL, 0);
@@ -146,6 +164,8 @@ int main(int argc, const char* argv[])
 
 	delete terminal;
 	delete sdlTerminal;
+
+	closelog();
 
 	exit(0);
 }

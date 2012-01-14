@@ -25,6 +25,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <syslog.h>
+#include <unistd.h>
 
 const int SDLCore::BUFFER_DIRTY_BIT = 1;
 const int SDLCore::FONT_DIRTY_BIT = 2;
@@ -42,6 +43,12 @@ SDLCore::SDLCore()
 	m_backgroundColor = TS_COLOR_BACKGROUND;
 	m_bBold = false;
 	m_bUnderline = false;
+	m_bBlink = false;
+	doBlink = false;
+	m_slot1 = TS_CS_G0_ASCII;
+	m_slot2 = TS_CS_G1_ASCII;
+
+	m_reverse = false;
 
 	m_fontNormal = NULL;
 	m_fontBold = NULL;
@@ -54,7 +61,6 @@ SDLCore::SDLCore()
 	m_gmainContext = NULL;
 	m_lsHandle = NULL;
 	m_lsEnabled = false;
-
 	m_keyRepeat.firsttime = 0;
 	m_keyRepeat.delay = 500; // 500
 	m_keyRepeat.interval = 35; // 35
@@ -67,6 +73,7 @@ SDLCore::~SDLCore()
 {
 	if (isRunning())
 	{
+		pthread_join(m_blinkThread, NULL);
 		shutdown();
 	}
 	// TODO: figure out if LSErrorFree needs to be called here.
@@ -181,7 +188,7 @@ int SDLCore::initOpenGL()
 {
 	const SDL_VideoInfo* videoInfo = SDL_GetVideoInfo();
 
-	clearScreen();
+	clearScreen(m_backgroundColor);
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -221,50 +228,31 @@ int SDLCore::createFonts(int nSize)
 	}
 
 	// TODO: Let user set this?
-	const char * Font = "./fonts/AnonymousProSpecial.ttf";
+	const char * Font = "./LiberationMono-Regular.ttf";
 
-	TTF_Font *font = TTF_OpenFont(Font, nSize);
-	TTF_Font *fontBold = TTF_OpenFont(Font, nSize);
-	TTF_Font *fontUnder = TTF_OpenFont(Font, nSize);
-	TTF_Font *fontBoldUnder = TTF_OpenFont(Font, nSize);
+	m_fontNormal = TTF_OpenFont(Font, nSize);
+	m_fontBold = TTF_OpenFont(Font, nSize);
+	m_fontUnder = TTF_OpenFont(Font, nSize);
+	m_fontBoldUnder = TTF_OpenFont(Font, nSize);
 
-	if (!font || !fontBold || !fontUnder || !fontBoldUnder)
+	if (!m_fontNormal || !m_fontBold || !m_fontUnder || !m_fontBoldUnder)
 	{
 		syslog(LOG_ERR, "Error loading font!");
-		TTF_CloseFont(font);
-		TTF_CloseFont(fontBold);
-		TTF_CloseFont(fontUnder);
-		TTF_CloseFont(fontBoldUnder);
+		closeFonts();
 		return -1;
 	}
 
-	int nWidth, nHeight;
-
-	if (TTF_SizeText(font, "O", &nWidth, &nHeight) != 0)
+	if (TTF_SizeText(m_fontNormal, "O", &m_nFontWidth, &m_nFontHeight) != 0)
 	{
 		syslog(LOG_ERR, "Cannot calculate font size: %s", TTF_GetError());
-		TTF_CloseFont(font);
-		TTF_CloseFont(fontBold);
-		TTF_CloseFont(fontUnder);
-		TTF_CloseFont(fontBoldUnder);
+		closeFonts();
 		return -1;
 	}
 
 	// Set font styles:
-	TTF_SetFontStyle(fontBold, TTF_STYLE_BOLD);
-	TTF_SetFontStyle(fontUnder, TTF_STYLE_UNDERLINE);
-	TTF_SetFontStyle(fontBoldUnder, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
-
-	//Releases current fonts.
-	closeFonts();
-
-	m_nFontWidth = nWidth;
-	m_nFontHeight = nHeight;
-
-	m_fontNormal = font;
-	m_fontBold = fontBold;
-	m_fontUnder = fontUnder;
-	m_fontBoldUnder = fontBoldUnder;
+	TTF_SetFontStyle(m_fontBold, TTF_STYLE_BOLD);
+	TTF_SetFontStyle(m_fontUnder, TTF_STYLE_UNDERLINE);
+	TTF_SetFontStyle(m_fontBoldUnder, TTF_STYLE_BOLD | TTF_STYLE_UNDERLINE);
 
 	m_nMaxLinesOfText = getMaximumLinesOfText();
 	m_nMaxColumnsOfText = getMaximumColumnsOfText();
@@ -309,6 +297,7 @@ void SDLCore::eventLoop()
 	Uint32 lDelay;
 
 	while (isRunning()) {
+		// If a key repeat event is not active:
 		// Block for an event, and then handle all queued events.
 		// This is important since input events (particularly mouse events)
 		// shouldn't be synchronous with a redraw but especially because various
@@ -316,7 +305,9 @@ void SDLCore::eventLoop()
 		// the screen as dirty and force a refresh.  We should never end up trying
 		// to draw faster than a controlled amount in all cases.
 
-/*		bool gotEvent = false;
+
+		bool gotEvent = false;
+
 		if (!m_keyRepeat.timestamp)
 		{
 			SDL_WaitEvent(&event);
@@ -325,10 +316,8 @@ void SDLCore::eventLoop()
 		else
 			gotEvent = SDL_PollEvent(&event);
 
-		if (gotEvent)
-		{*/
-	while (SDL_PollEvent(&event))
-	{
+		while (gotEvent)
+		{
 			switch (event.type)
 			{
 				case SDL_MOUSEMOTION:
@@ -346,6 +335,8 @@ void SDLCore::eventLoop()
 				case SDL_VIDEOEXPOSE:
 					redraw();
 					setDirty(BUFFER_DIRTY_BIT);
+					if (m_lsEnabled)
+						g_main_context_iteration(m_gmainContext,false); // Piggy backing onto the 0.5 update terminal thread...
 					break;
 				case SDL_VIDEORESIZE:
 					closeFonts();
@@ -360,11 +351,10 @@ void SDLCore::eventLoop()
 				default:
 					break;
 			}
+			gotEvent = SDL_PollEvent(&event);
 		}
-//		}
+
 		checkKeyRepeat();
-		if (m_lsEnabled)
-			g_main_context_iteration(m_gmainContext,false); // I need to redo the loop for this to get picked up better
 
 		if (isDirty(FONT_DIRTY_BIT))
 		{
@@ -415,6 +405,25 @@ void SDLCore::start()
 	}
 }
 
+int SDLCore::startBlinkThread()
+{
+	return pthread_create(&m_blinkThread, NULL, blinkThread, this);
+}
+
+void *SDLCore::blinkThread(void *ptr)
+{
+	SDL_Event event;
+	event.type = SDL_VIDEOEXPOSE;
+	SDLCore *core = (SDLCore *)ptr;
+	while (core->isRunning()) {
+		core->doBlink = !core->doBlink;
+		SDL_PushEvent(&event);
+		usleep(500000);
+	}
+	pthread_exit(NULL);
+	return NULL;
+}
+
 /**
  * Starts the main application event loop. Will not return until the application exits.
  * If SDL is not initialized, then this will return immediately.
@@ -423,6 +432,7 @@ void SDLCore::run()
 {
 	if (isRunning())
 	{
+		startBlinkThread();
 		eventLoop();
 	}
 }
@@ -502,6 +512,8 @@ int SDLCore::setFontSize(int nSize)
 		nSize = 1;
 	}
 
+	closeFonts();
+
 	if (createFonts(nSize) != 0)
 	{
 		syslog(LOG_ERR, "Cannot set new font size.");
@@ -559,15 +571,15 @@ void SDLCore::drawCursor(int nColumn, int nLine)
 	int nX = (nColumn - 1) * m_nFontWidth;
 	int nY = (nLine - 1) * m_nFontHeight;
 
-	drawRect(nX, nY, m_nFontWidth, m_nFontHeight, getColor(TS_COLOR_FOREGROUND), 0.35f);
+	drawRect(nX, nY, m_nFontWidth, m_nFontHeight, m_reverse ? getColor(TS_COLOR_BACKGROUND) : getColor(TS_COLOR_FOREGROUND), 0.35f);
 }
 
 /**
  * Clears the screen with the current background color.
  */
-void SDLCore::clearScreen()
+void SDLCore::clearScreen(TSColor_t color)
 {
-	SDL_Color bkgd = getColor(m_backgroundColor);
+	SDL_Color bkgd = getColor(color);
 	glClearColor(
 		((float)bkgd.r) / 255.0f,
 		((float)bkgd.g) / 255.0f,
@@ -688,7 +700,21 @@ void SDLCore::drawText(int nX, int nY, const char *sText)
 	else if (m_bBold)
 		fnt = 3;
 
-	drawTextGL(fnt, (int)m_foregroundColor, (int)m_backgroundColor, nX, nY, sText);
+	SDLFontGL::TextGraphicsInfo_t graphicsInfo;
+	graphicsInfo.font = fnt;
+	if (m_reverse) {
+		graphicsInfo.bg = (int)m_foregroundColor;
+		graphicsInfo.fg = (int)m_backgroundColor;
+	} else {
+		graphicsInfo.fg = (int)m_foregroundColor;
+		graphicsInfo.bg = (int)m_backgroundColor;
+	}
+	graphicsInfo.blink = ((int)m_bBlink && !(int)doBlink) ? 1 : 0;
+
+	graphicsInfo.slot1 = (int)m_slot1;
+	graphicsInfo.slot2 = (int)m_slot2;
+
+	drawTextGL(graphicsInfo, nX, nY, sText);
 
 	setDirty(BUFFER_DIRTY_BIT);
 }
@@ -755,24 +781,17 @@ void SDLCore::clearDirty(int nDirtyBits)
 	}
 }
 
-int SDLCore::getNextPowerOfTwo(int n)
-{
-	std::map<int, int>::iterator it = m_powerOfTwoLookup.find(n);
+int SDLCore::getNextPowerOfTwo(int n) {
+	if (n <= 0) return 1;
 
-	if (it == m_powerOfTwoLookup.end())
-	{
-		int i = 1;
-
-		while (i < n)
-		{
-			i *= 2;
-		}
-
-		m_powerOfTwoLookup[n] = i;
-		return i;
-	}
-
-	return it->second;
+	/* http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 */
+	--n;
+	n |= n >> 1;
+	n |= n >> 2;
+	n |= n >> 4;
+	n |= n >> 8;
+	n |= n >> 16;
+	return (n+1); /* warning: overflow possible */
 }
 
 void SDLCore::resetGlyphCache()
@@ -792,6 +811,12 @@ void SDLCore::resetGlyphCache()
 		cols[i] = getColor((TSColor_t)i);
 
 	setupFontGL(nFonts, (TTF_Font**)fnts, nCols, (SDL_Color*)&cols);
+}
+
+void SDLCore::stopKeyRepeat()
+{
+	m_keyRepeat.timestamp = 0;
+	return;
 }
 
 // pulled from SDL_keyboard.c / lgpl Copyright (C) 1997-2006 Sam Lantinga
@@ -830,26 +855,29 @@ void SDLCore::fakeKeyEvent(SDL_Event &event)
 {
 	int repeatable = 0;
 	Uint16 modstate;
+	Uint8 state;
 
 	modstate = (Uint16)SDL_GetModState();
 
 	if (event.type == SDL_KEYDOWN) 
 	{
+		state = SDL_PRESSED;
 		event.key.keysym.mod = (SDLMod)modstate;
 		switch (event.key.keysym.sym) 
 		{
 			case SDLK_UNKNOWN:
+				repeatable = 1;
 				break;
-/*			case SDLK_NUMLOCK:
+			case SDLK_NUMLOCK:
 				modstate ^= KMOD_NUM;
 				if ( ! (modstate&KMOD_NUM) )
 					state = SDL_RELEASED;
-				keysym->mod = (SDLMod)modstate;
+				event.key.keysym.mod = (SDLMod)modstate;
 				break;
-*/			case SDLK_CAPSLOCK:
+			case SDLK_CAPSLOCK:
 				modstate ^= KMOD_CAPS;
-//				if ( ! (modstate&KMOD_CAPS) )
-//					state = SDL_RELEASED;
+				if ( ! (modstate&KMOD_CAPS) )
+					state = SDL_RELEASED;
 				event.key.keysym.mod = (SDLMod)modstate;
 				break;
 			case SDLK_LCTRL:
@@ -886,6 +914,7 @@ void SDLCore::fakeKeyEvent(SDL_Event &event)
 	} 
 	else  // key up
 	{
+		state = SDL_RELEASED;
 		switch (event.key.keysym.sym) 
 		{
 			case SDLK_UNKNOWN:
@@ -930,11 +959,12 @@ void SDLCore::fakeKeyEvent(SDL_Event &event)
 	if (event.key.keysym.sym != SDLK_UNKNOWN) 
 	{
 		/* Drop events that don't change state */
-		//if ( SDL_KeyState[keysym->sym] == state )
-			//return;
+		Uint8 *keyState = SDL_GetKeyState(NULL);
+		if (keyState[event.key.keysym.sym] == state)
+			return;
 
 		/* Update internal keyboard state */
-		//SDL_KeyState[keysym->sym] = state;
+		keyState[event.key.keysym.sym] = state;
 		SDL_SetModState((SDLMod)modstate);
 	}
 
@@ -943,7 +973,7 @@ void SDLCore::fakeKeyEvent(SDL_Event &event)
 		if (m_keyRepeat.timestamp && m_keyRepeat.evt.key.keysym.sym == event.key.keysym.sym) 
 		{
 			m_keyRepeat.timestamp = 0;
-			syslog(LOG_ERR, "Removed Repeat Event");
+//			syslog(LOG_ERR, "Removed Repeat Event");
 		}
 	}
 	else
@@ -953,8 +983,9 @@ void SDLCore::fakeKeyEvent(SDL_Event &event)
 			m_keyRepeat.evt = event;
 			m_keyRepeat.firsttime = 1;
 			m_keyRepeat.timestamp = SDL_GetTicks();
-			syslog(LOG_ERR, "Added Repeat Event");
+//			syslog(LOG_ERR, "Added Repeat Event");
 		}
 	}
+
 	SDL_PushEvent(&event);
 }

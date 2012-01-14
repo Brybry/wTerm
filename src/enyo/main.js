@@ -134,6 +134,15 @@ enyo.kind({
 			else
 				this.$.terminal.resize(window.innerWidth, window.innerHeight)
 		}
+
+		// focus terminal area if hidden
+		if (!this.showVKB)
+		{
+//			this.$.terminal.$.plugin.focus();
+			if (this.$.terminal.$.plugin.hasNode())
+				this.$.terminal.$.plugin.node.focus();
+		}
+		
 		// fix the keyboard if orientation is locked
 		this.$.getPreferencesCall.call({"keys":["rotationLock"]});
 	},
@@ -148,12 +157,6 @@ enyo.kind({
 		} 
 		catch (e) { this.log("FIX THIS: "+e);}
 		this.setup();
-		if (!this.showVKB)
-		{
-//			this.$.terminal.$.plugin.focus();
-			if (this.$.terminal.$.plugin.hasNode())
-				this.$.terminal.$.plugin.node.focus();
-		}
 	},
 
 	cancelKeyRepeat: function() {

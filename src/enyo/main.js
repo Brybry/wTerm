@@ -14,7 +14,7 @@ enyo.kind({
 			{name: 'vkbToggle', caption: "Hide Virtual Keyboard", onclick: 'toggleVKB'},
 			{caption: "Preferences", onclick: "openPrefs"}
 		]},
-		{kind: "ApplicationEvents", onWindowRotated: "setup", onWindowDeactivated: "cancelKeyRepeat"},
+		{kind: "ApplicationEvents", onWindowRotated: "setup", onWindowDeactivated: "cancelKeyRepeat", onKeydown: "onBtKeyDown"},
 		{
 			kind: 'Popup2',
 			name: 'about',
@@ -135,14 +135,6 @@ enyo.kind({
 				this.$.terminal.resize(window.innerWidth, window.innerHeight)
 		}
 
-		// focus terminal area if hidden
-		if (!this.showVKB)
-		{
-//			this.$.terminal.$.plugin.focus();
-			if (this.$.terminal.$.plugin.hasNode())
-				this.$.terminal.$.plugin.node.focus();
-		}
-		
 		// fix the keyboard if orientation is locked
 		this.$.getPreferencesCall.call({"keys":["rotationLock"]});
 	},
@@ -157,6 +149,14 @@ enyo.kind({
 		} 
 		catch (e) { this.log("FIX THIS: "+e);}
 		this.setup();
+	},
+
+	onBtKeyDown: function(context, event) {
+		if (this.$.terminal.$.plugin.hasNode())
+		{
+			this.$.terminal.$.plugin.node.focus();
+			this.$.terminal.$.plugin.node.dispatchEvent(event);
+		}
 	},
 
 	cancelKeyRepeat: function() {

@@ -389,8 +389,8 @@ void SDLFontGL::startTextGL() {
 	// Start over in buffer
 	numChars = 0;
 
-	glClear(GL_COLOR_BUFFER_BIT);
-
+	//glClear(GL_COLOR_BUFFER_BIT);
+	
 	// Bind the master font texture
 	glBindTexture(GL_TEXTURE_2D, GlyphCache);
 	glEnableClientState(GL_COLOR_ARRAY);

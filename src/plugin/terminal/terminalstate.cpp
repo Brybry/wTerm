@@ -1151,6 +1151,7 @@ void TerminalState::insertChar(CellCharacter c, bool bAdvanceCursor, bool bIgnor
 		// Populate the line with the the specified character, using cur graphics
 		(*line)[nPos].graphics = m_currentGraphicsState;
 		(*line)[nPos].data = c;
+		(*line)[nPos].dirty = true;
 
 		if (bShift)
 		{

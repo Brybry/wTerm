@@ -264,10 +264,12 @@ void SDLCore::eventLoop()
 				case SDL_MOUSEMOTION:
 				case SDL_MOUSEBUTTONDOWN:
 				case SDL_MOUSEBUTTONUP:
+					syslog(LOG_DEBUG, "mouseEvent: %i", event.type);
 					handleMouseEvent(event);
 					break;
 				case SDL_KEYUP:
 				case SDL_KEYDOWN:
+					syslog(LOG_DEBUG, "keyboardEvent: %i", event.key.keysym.sym);
 					handleKeyboardEvent(event);
 					break;
 				case SDL_VIDEOEXPOSE:
@@ -370,7 +372,7 @@ void SDLCore::run()
 {
 	if (isRunning())
 	{
-		startBlinkThread();
+		//startBlinkThread();
 		eventLoop();
 	}
 }
@@ -504,7 +506,7 @@ void SDLCore::drawRect(int nX, int nY, int nWidth, int nHeight, SDL_Color color,
 
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
-	setDirty(BUFFER_DIRTY_BIT);
+	//setDirty(BUFFER_DIRTY_BIT);
 }
 
 void SDLCore::drawCursor(int nColumn, int nLine)
@@ -529,7 +531,7 @@ void SDLCore::clearScreen(TSColor_t color)
 
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	setDirty(BUFFER_DIRTY_BIT);
+	//setDirty(BUFFER_DIRTY_BIT);
 }
 
 void SDLCore::drawSurface(int nX, int nY, SDL_Surface *surface)
@@ -601,7 +603,7 @@ void SDLCore::drawSurface(int nX, int nY, SDL_Surface *surface)
 	glDeleteTextures(1, &texture);
 	SDL_FreeSurface(mainSurface);
 
-	setDirty(BUFFER_DIRTY_BIT);
+	//setDirty(BUFFER_DIRTY_BIT);
 }
 
 void SDLCore::drawImage(int nX, int nY, const char *sImage)
@@ -619,7 +621,7 @@ void SDLCore::drawImage(int nX, int nY, const char *sImage)
 
 	SDL_FreeSurface(surface);
 
-	setDirty(BUFFER_DIRTY_BIT);
+	//setDirty(BUFFER_DIRTY_BIT);
 }
 
 /**
@@ -652,7 +654,7 @@ void SDLCore::drawCharacter(int nX, int nY, CellCharacter cChar)
 
 	drawTextGL(graphicsInfo, nX, nY, cChar);
 
-	setDirty(BUFFER_DIRTY_BIT);
+	//setDirty(BUFFER_DIRTY_BIT);
 }
 
 /**

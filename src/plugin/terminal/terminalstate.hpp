@@ -194,6 +194,7 @@ typedef uint16_t CellCharacter;
 typedef struct {
 	TSCellGraphicsState_t graphics;
 	CellCharacter data;
+	bool dirty;
 } TSCell_t;
 // Say that a line is a vector of cells.
 // For now, they don't have to be the same size as the screen,
@@ -331,6 +332,7 @@ public:
 		TSCell_t cell;
 		cell.graphics = m_defaultGraphicsState;
 		cell.data = BLANK;
+		cell.dirty = true;
 		return cell;
 	}
 

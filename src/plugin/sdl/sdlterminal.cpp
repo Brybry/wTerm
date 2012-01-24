@@ -344,6 +344,7 @@ void SDLTerminal::handleKeyboardEvent(SDL_Event &event)
 
 void SDLTerminal::redraw()
 {
+	syslog(LOG_DEBUG, "REDRAW");
 	m_terminalState->lock();
 
 	int nTopLineIndex = m_terminalState->getBufferTopLineIndex();
@@ -355,12 +356,14 @@ void SDLTerminal::redraw()
 	m_reverse = (m_terminalState->getTerminalModeFlags() & TS_TM_SCREEN);
 
 	// Clear the entire screen to the default background color
-	clearScreen(m_reverse ? defState.foregroundColor : defState.backgroundColor);
+	//clearScreen(m_reverse ? defState.foregroundColor : defState.backgroundColor);
+
 
 	bool hasBlinkText = false;
 
 	startTextGL();
 
+	// the most cost is in here
 	for (int i = nTopLineIndex; i < nEndLine; ++i)
 	{
 		TSLine_t * line = m_terminalState->getBufferLine(i);
@@ -369,12 +372,17 @@ void SDLTerminal::redraw()
 		for(TSLine_t::iterator I = line->begin(), E = line->end(); I != E;
 				++I, ++nCol)
 		{
-			setGraphicsState(I->graphics);
-			hasBlinkText |= (I->graphics.nGraphicsMode & TS_GM_BLINK) != 0;
-			printCharacter(nCol, i - nTopLineIndex + 1, I->data);
+			if (I->dirty == true)
+			{
+				syslog(LOG_DEBUG, "Dirty[%i]: (%i,%i)", I->data, i, nCol);
+				setGraphicsState(I->graphics); // a bit costly
+				hasBlinkText |= (I->graphics.nGraphicsMode & TS_GM_BLINK) != 0; // I haven't thought about this yet
+				printCharacter(nCol, i - nTopLineIndex + 1, I->data); // heaviest cost
+				I->dirty = false;
+			}
 		}
 	}
-
+	// some cost
 	endTextGL();
 
 	if (m_terminalState->getTerminalModeFlags() & TS_TM_CURSOR)

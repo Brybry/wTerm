@@ -10,7 +10,9 @@ enyo.kind({
 			kind: "ApplicationEvents",
 			onWindowRotated: "setup",
 			onWindowActivated: 'windowActivated',
-			onWindowDeactivated: 'windowDeactivated'
+			onWindowDeactivated: 'windowDeactivated',
+			onKeydown: 'btKeydown',
+			onKeyup: 'btKeyup'
 		},
 		{
 			name : "getPreferencesCall",
@@ -202,6 +204,22 @@ enyo.kind({
 	VKBLayoutChange: function() {
 		this.setup()
 		this.render()
-	}
+	},
 
+	btKeydown: function(inSender, inEvent) {
+//		console.log("wTermApp::Keydown **"+inEvent.keyIdentifier);
+		if (enyo.fetchDeviceInfo().platformVersionMajor == 3) {
+			this.$.terminal.$.plugin.hasNode().dispatchEvent(inEvent);
+			this.$.terminal.$.plugin.hasNode().focus();
+		}	
+	},
+	
+	// This will probably never be called
+	btKeyup: function(inSender, inEvent) {
+//		console.log("wTermApp::Keyup**"+inEvent.keyIdentifier);
+		if (enyo.fetchDeviceInfo().platformVersionMajor == 3) {
+			this.$.terminal.$.plugin.hasNode().dispatchEvent(inEvent);
+			this.$.terminal.$.plugin.hasNode().focus();
+		}	
+	},
 })

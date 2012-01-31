@@ -219,16 +219,13 @@ enyo.kind({
 	},
 	
 	keydownHandler: function(inSender, inEvent) {
-		if (enyo.fetchDeviceInfo().platformVersionMajor == 3) {
-			this.$.plugin.hasNode().dispatchEvent(inEvent);
-		} else {
+		if (enyo.fetchDeviceInfo().platformVersionMajor !== 3) {
 			this.keyDown(inEvent.keyCode, String.fromCharCode(parseInt(inEvent.keyIdentifier.substr(2), 16)))
 		}
 	},
+
 	keyupHandler: function(inSender, inEvent) {
-		if (enyo.fetchDeviceInfo().platformVersionMajor == 3) {
-			this.$.plugin.hasNode().dispatchEvent(inEvent);
-		} else {
+		if (enyo.fetchDeviceInfo().platformVersionMajor != 3) {
 			this.keyUp(inEvent.keyCode, String.fromCharCode(parseInt(inEvent.keyIdentifier.substr(2), 16)))
 		}
 	},

@@ -125,7 +125,12 @@ enyo.kind({
 				if (!tobj) // maybe pointless
 					continue;
 
-				if (tobj != this)
+				if (tobj == this)
+					continue;
+
+				if (inEvent.type == "touchstart")
+					tobj.handleDownEvent(null);
+				else
 					tobj.handleUpEvent(null);
 			}
 
@@ -133,6 +138,9 @@ enyo.kind({
 	},
 
 	handleUpEvent: function(inEvent) {
+		// stop bubbling of events we've caught
+		if (inEvent)
+			inEvent.stopPropagation()
 		this.handleBundledEvents(inEvent)
 		if (!this.disabled && !this.toggling) {
 			this.setDown(false)
@@ -141,6 +149,10 @@ enyo.kind({
 	},
 
 	handleDownEvent: function(inEvent) {
+		// stop bubbling of events we've caught
+		if (inEvent)
+			inEvent.stopPropagation()
+		this.handleBundledEvents(inEvent)
 		if (!this.disabled) {
 			if (this.toggling)
 				this.setDown(!this.down)

@@ -302,5 +302,47 @@ enyo.kind({
 	dispatchKeyInput: function(inSender, inEvent) {
 		this.$.terminal.focus();
 		this.$.terminal.hasNode().dispatchEvent(inEvent);
+	},
+	
+	rendered: function() {
+		this.inherited(arguments);
+		if (this.hasNode() && !this._isPhone) {
+			this.node.addEventListener("touchstart", enyo.bind(this, this.handleTouchEvent), false);
+			this.node.addEventListener("touchend", enyo.bind(this, this.handleTouchEvent), false);
+			this.node.addEventListener("touchcancel", enyo.bind(this, this.handleTouchEvent), false);
+		}
+	},
+
+	handleTouchEvent: function(inEvent) {
+		if (inEvent && inEvent.changedTouches && inEvent.changedTouches.length > 1)
+		{
+			for (var i=0; i < inEvent.changedTouches.length; i++)
+			{
+				// Try to find our parent div as our current HTMLElement could be any child of it
+				var tobj = inEvent.changedTouches[i].target;
+				while (tobj)
+				{
+					// would it be faster to just check if enyo.$[tobj.id] && enyo.$[tobj.id].kind == 'vkbKey'?
+					if (/^wTermApp_vkb_vkbKey\d*$/.test(tobj.id))
+						break;
+					tobj = tobj.parentElement;
+				}
+
+				if (!tobj) // parent was document
+					continue;
+
+				// Grab the enyo instance
+				tobj = enyo.$[tobj.id];
+
+				if (!tobj)
+					continue;
+
+				if (inEvent.type == "touchstart")
+					tobj.handleDownEvent(null)
+				else
+					tobj.handleUpEvent(null);
+			}
+
+		}
 	}
 })

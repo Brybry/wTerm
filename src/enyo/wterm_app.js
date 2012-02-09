@@ -318,45 +318,27 @@ enyo.kind({
 		while (inElement)
 		{
 			enyoObject = enyo.$[inElement.id];
-			if (enyoObject)
+			if (enyoObject && enyoObject.kind == 'vkbKey')
 				return enyoObject;
 			inElement = inElement.parentElement;
 		}
 		return null;
 	},
 
-	getEnyoObjectByProperty: function (enyoObject, inProperty) {
-		while (enyoObject)
-		{
-			if (enyoObject.__proto__.hasOwnProperty(inProperty) || enyoObject.hasOwnProperty(inProperty))
-			{
-				return enyoObject;
-			}
-			enyoObject = enyoObject.parent;
-		}
-		return enyoObject;
-	},
-
 	handleTouchstart: function(inEvent) {
-		if (!inEvent && !inEvent.changedTouches) // probably not needed
-			return;
-
 		for (var i = 0; i < inEvent.changedTouches.length; i++)
 		{
 			var enyoObject = this.getEnyoObjectFromElement(inEvent.changedTouches[i].target);
-			if (enyoObject = this.getEnyoObjectByProperty(enyoObject, "handleDownEvent"))
+			if (enyoObject)
 				enyoObject.handleDownEvent.call(enyoObject, inEvent);
 		}
 	},
 
 	handleTouchend: function(inEvent) {
-		if (!inEvent && !inEvent.changedTouches) // probably not needed
-			return;
-
 		for (var i = 0; i < inEvent.changedTouches.length; i++)
 		{
 			var enyoObject = this.getEnyoObjectFromElement(inEvent.changedTouches[i].target);
-			if (enyoObject = this.getEnyoObjectByProperty(enyoObject, "handleUpEvent"))
+			if (enyoObject)
 				enyoObject.handleUpEvent.call(enyoObject, inEvent);
 		}
 	}

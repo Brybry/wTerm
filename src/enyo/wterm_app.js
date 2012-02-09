@@ -302,5 +302,62 @@ enyo.kind({
 	dispatchKeyInput: function(inSender, inEvent) {
 		this.$.terminal.focus();
 		this.$.terminal.hasNode().dispatchEvent(inEvent);
+	},
+
+	rendered: function() {
+		this.inherited(arguments);
+		if (this.hasNode() && !this._isPhone) {
+			this.node.addEventListener("touchstart", enyo.bind(this, this.handleTouchstart), false);
+			this.node.addEventListener("touchend", enyo.bind(this, this.handleTouchend), false);
+			this.node.addEventListener("touchcancel", enyo.bind(this, this.handleTouchend), false);
+		}
+	},
+
+	getEnyoObjectFromElement: function(inElement) {
+		var enyoObject = null;
+		while (inElement)
+		{
+			enyoObject = enyo.$[inElement.id];
+			if (enyoObject)
+				return enyoObject;
+			inElement = inElement.parentElement;
+		}
+		return null;
+	},
+
+	getEnyoObjectByProperty: function (enyoObject, inProperty) {
+		while (enyoObject)
+		{
+			if (enyoObject.__proto__.hasOwnProperty(inProperty) || enyoObject.hasOwnProperty(inProperty))
+			{
+				return enyoObject;
+			}
+			enyoObject = enyoObject.parent;
+		}
+		return enyoObject;
+	},
+
+	handleTouchstart: function(inEvent) {
+		if (!inEvent && !inEvent.changedTouches) // probably not needed
+			return;
+
+		for (var i = 0; i < inEvent.changedTouches.length; i++)
+		{
+			var enyoObject = this.getEnyoObjectFromElement(inEvent.changedTouches[i].target);
+			if (enyoObject = this.getEnyoObjectByProperty(enyoObject, "handleDownEvent"))
+				enyoObject.handleDownEvent.call(enyoObject, inEvent);
+		}
+	},
+
+	handleTouchend: function(inEvent) {
+		if (!inEvent && !inEvent.changedTouches) // probably not needed
+			return;
+
+		for (var i = 0; i < inEvent.changedTouches.length; i++)
+		{
+			var enyoObject = this.getEnyoObjectFromElement(inEvent.changedTouches[i].target);
+			if (enyoObject = this.getEnyoObjectByProperty(enyoObject, "handleUpEvent"))
+				enyoObject.handleUpEvent.call(enyoObject, inEvent);
+		}
 	}
 })
